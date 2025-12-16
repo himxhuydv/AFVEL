@@ -6,7 +6,7 @@ import re
 st.set_page_config(page_title="AFVEL", layout="wide")
 
 # --- FILE PATHS ---
-BG_IMAGE_PATH = "assets/logo.jpg"
+BG_VIDEO_PATH = "assets/video2.mp4"
 VIDEO_PATH_1 = "assets/video1.mp4" 
 PASSWORD_DIR = "data/passwords"
 
@@ -41,19 +41,14 @@ def get_video_html(path, width, height):
         print(f"DEBUG: FILE NOT FOUND at {path}")
         return f"<div style='color: orange; text-align: center; margin-top: 20px;'>{os.path.basename(path)} **FILE NOT FOUND**. Check path: {path}</div>"
 
+def get_bg_video_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
 VIDEO_WIDTH = 600
 VIDEO_HEIGHT = 338 
 video_html = get_video_html(VIDEO_PATH_1, VIDEO_WIDTH, VIDEO_HEIGHT)
-
-# ---------- Load background ----------
-def load_bg_image(path):
-    try:
-        with open(path, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    except FileNotFoundError:
-        return "" 
-
-bg_image = load_bg_image(BG_IMAGE_PATH)
+bg_video = get_bg_video_base64(BG_VIDEO_PATH)
 
 # ---------- CSS (UNCHANGED) ----------
 st.markdown(
@@ -65,26 +60,27 @@ st.markdown(
         width: 100%;
         height: 100%;
         background: black;
+        overflow-x: hidden;
     }}
 
-    .stApp {{
-        background-image: url("data:image/jpg;base64,{bg_image}");
-        background-size: cover;
-        background-position: center 25%;
-        background-repeat: no-repeat;
+    .bg-video {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        z-index: -1;
+        filter: brightness(0.45);
     }}
 
     .block-container {{
-        padding: 0;
-        margin: 0;
-        max-width: 100%;
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
     }}
 
     .overlay {{
-        background: linear-gradient(
-            rgba(0, 0, 0, 0.0),
-            rgba(0, 0, 0, 0.0)
-        );
         min-height: calc(100vh - 380px); 
         display: flex;
         flex-direction: column;
@@ -112,32 +108,31 @@ st.markdown(
     }}
 
     .card {{
-        width: 100%;
-        background: rgba(0,0,0,0.3); 
+        max-width: 400px !important;
+        width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        background: rgba(0,0,0,0.35); 
         padding: 22px;
         border-radius: 16px;
         border: 1px solid rgba(255,255,255,0.15);
+        backdrop-filter: blur(6px);
     }}
 
-    div[data-testid="stTextInput"] {{
-        max-width: 100%;
-        margin-left: auto; 
-        margin-right: auto;
-    }}
-
-    div[data-testid="stHorizontalBlock"] > div[data-testid="stRadio"] {{
-        width: fit-content;
-        margin-left: auto;
-        margin-right: auto;
-    }}
-
-    .stRadio label {{
-        text-align: center;
-        display: block;
-        width: 100%;
+    div[data-testid="stTextInput"],
+    div[data-testid="stPasswordInput"],
+    div[data-testid="stRadio"],
+    div[data-testid="stButton"],
+    div[data-testid="stCameraInput"],
+    div[data-testid="stAudioInput"] {{
+        max-width: 400px !important;
+        width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
     }}
 
     div.stButton > button {{
+        width: 100% !important;
         background-color: rgba(0, 0, 0, 0.6) !important;
         color: #00FF41 !important;
         border: 2px solid #00FF41 !important;
@@ -149,64 +144,19 @@ st.markdown(
         box-shadow: 0 0 5px #00FF41, inset 0 0 5px #00FF41 !important; 
     }}
 
-    div.stButton > button:hover {{
-        background-color: rgba(0, 0, 0, 0.8) !important;
-        color: #FFFFFF !important; 
-        border-color: #00FFFF !important; 
-        box-shadow: 
-            0 0 10px #00FFFF, 
-            0 0 20px #00FFFF, 
-            inset 0 0 10px #00FFFF !important;
-    }}
-
     .info-box {{
-        max-width: 400px; 
-        background: rgba(0, 0, 0, 0.5); 
-        color: #00FF41; 
-        padding: 20px;
-        margin: 20px auto 30px auto; 
-        border-radius: 12px;
-        border: 2px solid #00FF41; 
-        text-align: left;
-        font-family: monospace;
-        box-shadow: 
-            0 0 10px #00FF41, 
-            0 0 20px #00FF41, 
-            0 0 40px rgba(0, 255, 65, 0.5); 
-    }}
-
-    .creator-credit {{
-        font-size: 12px;
-        text-align: right;
-        border-top: 1px solid rgba(0, 255, 65, 0.3);
-        padding-top: 10px;
-        margin-top: 15px;
+        max-width: 400px !important;
+        background: rgba(0,0,0,0.5);
     }}
 
     .system-status {{
-        width: 90%; 
-        max-width: 400px;
-        background: rgba(0, 0, 0, 0.7);
-        color: #00FFFF;
-        padding: 8px 15px;
-        margin: 15px auto 25px auto;
-        border-radius: 4px;
-        border: 1px solid #00FFFF;
-        font-family: monospace;
-        font-size: 14px;
-        display: flex;
-        justify-content: center;
-        box-shadow: 0 0 8px #00FFFF;
-        text-align: center;
-    }}
-
-    .narrow-content {{
-        max-width: 400px;
-        width: 100%;
-        margin-left: auto;
-        margin-right: auto;
+        max-width: 400px !important;
     }}
     </style>
+
+    <video class="bg-video" autoplay loop muted playsinline>
+        <source src="data:video/mp4;base64,{bg_video}" type="video/mp4">
+    </video>
     """,
     unsafe_allow_html=True
 )
@@ -226,36 +176,30 @@ st.markdown(
 )
 
 # ---------- 3. INSTRUCTION AND CREATOR INFO (AFTER TITLE) ----------
-st.markdown(
-    """
-    <div class="info-box">
-        <h3>SYSTEM PROTOCOL: USER AUTHENTICATION</h3>
-        <ul>
-            <li><b>Mode Select:</b> Choose Enroll or Verify</li>
-            <li><b>ID Entry:</b> Name, Email, System Key</li>
-            <li><b>Biometric Capture:</b> Face & Voice</li>
-            <li><b>Execute:</b> Save or Verify Identity</li>
-        </ul>
-        <p class="creator-credit">
-            <span style='color:#00FFFF;'>//SYSTEM BUILD //</span><br>
-            Creator: <b>Himxhuydv</b> | AFVEL v1.0
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+info_html = f"""
+<div class="info-box">
+    <h3>SYSTEM PROTOCOL: USER AUTHENTICATION</h3>
+    <ul>
+        <li>**Mode Select:** Choose **Enroll** (Initial Setup) or **Verify** (Access).</li>
+        <li>**ID Entry:** Provide Name, Email (used as Unique ID), and System Key.</li>
+        <li>**Biometric Capture:** Capture a fresh **Face** image and **Voice** recording.</li>
+        <li>**Execute:** Click the button to save or check your multi-factor identity.</li>
+    </ul>
+    <p class="creator-credit">
+        <span style='color: #00FFFF;'>//SYSTEM BUILD //</span><br>
+        Creator: <span style='font-weight: bold;'>Himxhuydv</span> | AFVEL v1.0
+    </p>
+</div>
+"""
+st.markdown(info_html, unsafe_allow_html=True)
 
 # ---------- 4. NEW: DEVELOPER SIGNATURE BAR (FILLING THE GAP) ----------
-st.markdown(
-    """
-    <div class="system-status">
-        <span>[DESIGN STATUS] GENERALLY DESIGNED AND MADE BY HIMXHUYDV</span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-st.markdown("<div class='narrow-content'>", unsafe_allow_html=True)
+developer_signature_html = f"""
+<div class="system-status">
+    <span>[DESIGN STATUS] GENERALLY DESIGNED AND MADE BY HIMXHUYDV: DASHING 19 YEAR OLD, DECENT CUTE PUNJABI MUNDA</span>
+</div>
+"""
+st.markdown(developer_signature_html, unsafe_allow_html=True)
 
 # ---------- MODE & INPUTS SETUP (AFTER GAP) ----------
 mode = st.radio("Select Mode", ["Enroll", "Verify"], horizontal=True)
@@ -265,10 +209,11 @@ user_password = st.text_input("Enter System Key", type="password")
 
 os.makedirs("data/faces", exist_ok=True)
 os.makedirs("data/voices", exist_ok=True)
-os.makedirs(PASSWORD_DIR, exist_ok=True)
+os.makedirs(PASSWORD_DIR, exist_ok=True) 
 
 def get_safe_id(email):
-    return re.sub(r'[^a-zA-Z0-9\-\.]', '_', email).lower().strip('_')
+    safe_id = re.sub(r'[^a-zA-Z0-9\-\.]', '_', email)
+    return safe_id.lower().strip('_')
 
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 
@@ -277,35 +222,39 @@ if mode == "Enroll":
     st.markdown("### 🧑 Enrollment")
     face = st.camera_input("Capture Face")
     voice = st.audio_input("Record Voice")
+
     if st.button("Save Identity"):
         if not (user_email and user_password and face and voice):
-            st.warning("Please provide all details.")
+            st.warning("Please provide name, email, System Key, face, and voice to enroll.")
+        elif '@' not in user_email or '.' not in user_email:
+            st.error("Please enter a valid email address.")
         else:
-            sid = get_safe_id(user_email)
-            with open(f"data/faces/{sid}.jpg", "wb") as f:
+            safe_id = get_safe_id(user_email)
+            with open(f"data/faces/{safe_id}.jpg", "wb") as f:
                 f.write(face.getbuffer())
-            with open(f"data/voices/{sid}.wav", "wb") as f:
+            with open(f"data/voices/{safe_id}.wav", "wb") as f:
                 f.write(voice.getbuffer())
-            with open(f"{PASSWORD_DIR}/{sid}.txt", "w") as f:
+            with open(f"{PASSWORD_DIR}/{safe_id}.txt", "w") as f:
                 f.write(user_password)
-            st.success("Identity Enrolled Successfully")
+            st.success(f"✅ Identity for **{user_email}** Enrolled Successfully")
 
 # ---------- VERIFY (Complete) ----------
 if mode == "Verify":
     st.markdown("### 🔐 Verification")
     face = st.camera_input("Capture Face")
     voice = st.audio_input("Record Voice")
-    if st.button("Verify Identity"):
-        sid = get_safe_id(user_email)
-        if os.path.exists(f"{PASSWORD_DIR}/{sid}.txt"):
-            with open(f"{PASSWORD_DIR}/{sid}.txt") as f:
-                if f.read().strip() == user_password:
-                    st.success("ACCESS GRANTED")
-                else:
-                    st.error("ACCESS DENIED")
-        else:
-            st.error("IDENTITY NOT FOUND")
 
-st.markdown("</div>", unsafe_allow_html=True)
+    if st.button("Verify Identity"):
+        safe_id = get_safe_id(user_email)
+        password_path = f"{PASSWORD_DIR}/{safe_id}.txt"
+        if os.path.exists(password_path):
+            with open(password_path) as f:
+                if f.read().strip() == user_password:
+                    st.success("🔓 ACCESS GRANTED (Basic Multi-factor Match)")
+                else:
+                    st.error("❌ ACCESS DENIED: Invalid System Key.")
+        else:
+            st.error("❌ ACCESS DENIED: Identity not found.")
+
 st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
