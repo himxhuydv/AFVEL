@@ -114,6 +114,10 @@ with right:
 
     mode = st.radio("MODE", ["Enroll", "Verify"], horizontal=True)
 
+    # ---------- SESSION STATE ----------
+    if "logged_user" not in st.session_state:
+        st.session_state.logged_user = None
+
     # -------- ENROLL --------
     if mode == "Enroll":
         name = st.text_input("FULL NAME")
@@ -144,22 +148,15 @@ with right:
                 else:
                     st.error(msg)
 
-    # -------- VERIFY --------
+    # -------- VERIFY (CLEAN, NO DEBUG) --------
     if mode == "Verify":
         email = st.text_input("EMAIL ADDRESS")
         password = st.text_input("PASSWORD", type="password")
 
-        st.markdown("<div class='section-title'>BIOMETRIC SCANNER</div>", unsafe_allow_html=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.camera_input("SCAN FACE")
-        with c2:
-            st.audio_input("SCAN VOICE")
-
         if st.button("LOGIN"):
             success, user = verify_user(email, password)
             if success:
+                st.session_state.logged_user = user
                 st.success(f"Welcome {user['name']}")
             else:
                 st.error("Invalid credentials")

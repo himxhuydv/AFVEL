@@ -2,15 +2,16 @@ import os
 import json
 import uuid
 from datetime import datetime
+from .face_engine import get_face_embedding
 
-BASE_DIR = "data"
+
+BASE_DIR = os.path.join(os.getcwd(), "data")
 FACE_DIR = os.path.join(BASE_DIR, "faces")
 VOICE_DIR = os.path.join(BASE_DIR, "voices")
 USER_FILE = os.path.join(BASE_DIR, "users.json")
 
 os.makedirs(FACE_DIR, exist_ok=True)
 os.makedirs(VOICE_DIR, exist_ok=True)
-os.makedirs(BASE_DIR, exist_ok=True)
 
 # ---------- UTIL ----------
 def load_users():
@@ -27,7 +28,6 @@ def save_users(users):
 def enroll_user(name, email, password, face_file, voice_file):
     users = load_users()
 
-    # prevent duplicate email
     for u in users:
         if u["email"] == email:
             return False, "User already exists"
@@ -37,21 +37,28 @@ def enroll_user(name, email, password, face_file, voice_file):
     face_path = os.path.join(FACE_DIR, f"{user_id}.jpg")
     voice_path = os.path.join(VOICE_DIR, f"{user_id}.wav")
 
-    # save face
+    # Save face image
     with open(face_path, "wb") as f:
         f.write(face_file.getbuffer())
 
-    # save voice
+    # Save voice audio
     with open(voice_path, "wb") as f:
         f.write(voice_file.getbuffer())
+
+    # 🔥 NEW: Generate face embedding
+    face_embedding = get_face_embedding(face_path)
+
+    if face_embedding is None:
+        return False, "Face not detected properly. Try again."
 
     user_data = {
         "id": user_id,
         "name": name,
         "email": email,
-        "password": password,  # ⚠️ plaintext for now (will hash later)
+        "password": password,
         "face_path": face_path,
         "voice_path": voice_path,
+        "face_embedding": face_embedding,
         "created_at": datetime.utcnow().isoformat()
     }
 
@@ -60,7 +67,7 @@ def enroll_user(name, email, password, face_file, voice_file):
 
     return True, "Enrollment successful"
 
-# ---------- VERIFY (TEMP) ----------
+# ---------- VERIFY ----------
 def verify_user(email, password):
     users = load_users()
     for u in users:
