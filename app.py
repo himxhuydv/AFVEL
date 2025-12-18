@@ -1,260 +1,251 @@
+# =======================
+# IMPORTS
+# =======================
+import os
+import json
+import bcrypt
 import streamlit as st
 import base64
-import os
 import re
+import cv2
+import numpy as np
 
+# =======================
+# PAGE CONFIG
+# =======================
 st.set_page_config(page_title="AFVEL", layout="wide")
 
-# --- FILE PATHS ---
+# =======================
+# PATHS
+# =======================
 BG_VIDEO_PATH = "assets/video2.mp4"
-VIDEO_PATH_1 = "assets/video1.mp4" 
-PASSWORD_DIR = "data/passwords"
+VIDEO_PATH_1 = "assets/video1.mp4"
+FACE_CASCADE_PATH = "assets/haarcascade_frontalface_default.xml"
 
-# 1. Video preparation (Reading and Base64 Encoding)
-def get_video_html(path, width, height):
-    if os.path.exists(path):
-        try:
-            with open(path, "rb") as f:
-                video_bytes_content = f.read()
-            video_bytes = base64.b64encode(video_bytes_content).decode()
-            print(f"DEBUG: Successfully encoded {os.path.basename(path)}")
-            return f"""
-            <div style='text-align: center; padding: 20px 0 5px 0;'>
-                <video 
-                    width='{width}' 
-                    height='{height}' 
-                    autoplay 
-                    loop 
-                    muted
-                    playsinline
-                    style='border-radius: 8px; margin: 0 auto;'
-                >
-                    <source src='data:video/mp4;base64,{video_bytes}' type='video/mp4'>
-                    Your browser does not support the video tag.
-                </video>
-            </div>
-            """
-        except Exception as e:
-            print(f"DEBUG: ERROR encoding {os.path.basename(path)}: {e}")
-            return f"<div style='color: red; text-align: center; margin-top: 20px;'>Error encoding {os.path.basename(path)}: {e}</div>"
-    else:
-        print(f"DEBUG: FILE NOT FOUND at {path}")
-        return f"<div style='color: orange; text-align: center; margin-top: 20px;'>{os.path.basename(path)} **FILE NOT FOUND**. Check path: {path}</div>"
+# =======================
+# SESSION STATE
+# =======================
+if "access_granted" not in st.session_state:
+    st.session_state.access_granted = False
+
+if "enroll_success" not in st.session_state:
+    st.session_state.enroll_success = False
+
+# =======================
+# FACE DETECTOR
+# =======================
+face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
+
+# =======================
+# HELPER FUNCTIONS
+# =======================
+def get_safe_id(email):
+    return re.sub(r'[^a-zA-Z0-9\-\.]', '_', email).lower().strip('_')
+
+
+def extract_face(image_path):
+    img = cv2.imread(image_path)
+    if img is None:
+        return None
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(
+        gray, scaleFactor=1.3, minNeighbors=5
+    )
+
+    if len(faces) == 0:
+        return None
+
+    x, y, w, h = faces[0]
+    face = gray[y:y+h, x:x+w]
+    face = cv2.resize(face, (200, 200))
+    return face
+
+
+def save_user(email, password, face, voice):
+    user_dir = f"data/users/{get_safe_id(email)}"
+    os.makedirs(user_dir, exist_ok=True)
+
+    # Save password (hashed)
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    with open(f"{user_dir}/password.hash", "wb") as f:
+        f.write(hashed)
+
+    # Save profile
+    with open(f"{user_dir}/profile.json", "w") as f:
+        json.dump({"email": email}, f, indent=4)
+
+    # Save face image
+    face_path = f"{user_dir}/face.jpg"
+    with open(face_path, "wb") as f:
+        f.write(face.getbuffer())
+
+    # Extract & save face data
+    face_img = extract_face(face_path)
+    if face_img is not None:
+        np.save(f"{user_dir}/face.npy", face_img)
+
+    # Save voice
+    with open(f"{user_dir}/voice.wav", "wb") as f:
+        f.write(voice.getbuffer())
+
+
+def verify_password(email, password):
+    user_dir = f"data/users/{get_safe_id(email)}"
+    path = f"{user_dir}/password.hash"
+    if not os.path.exists(path):
+        return False
+    with open(path, "rb") as f:
+        return bcrypt.checkpw(password.encode(), f.read())
+
+
+def verify_face(email, live_face):
+    user_dir = f"data/users/{get_safe_id(email)}"
+    saved_face_path = f"{user_dir}/face.npy"
+
+    if not os.path.exists(saved_face_path):
+        return False
+
+    temp_path = f"{user_dir}/temp_face.jpg"
+    with open(temp_path, "wb") as f:
+        f.write(live_face.getbuffer())
+
+    live_face_img = extract_face(temp_path)
+    if live_face_img is None:
+        return False
+
+    saved_face = np.load(saved_face_path)
+    diff = np.mean(np.abs(saved_face - live_face_img))
+
+    return diff < 40   # threshold
+
+
+def get_video_html(path):
+    if not os.path.exists(path):
+        return ""
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    return f"""
+    <div style="text-align:center;">
+        <video autoplay loop muted playsinline width="600">
+            <source src="data:video/mp4;base64,{b64}" type="video/mp4">
+        </video>
+    </div>
+    """
+
 
 def get_bg_video_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-VIDEO_WIDTH = 600
-VIDEO_HEIGHT = 338 
-video_html = get_video_html(VIDEO_PATH_1, VIDEO_WIDTH, VIDEO_HEIGHT)
+
+# =======================
+# VIDEO
+# =======================
+video_html = get_video_html(VIDEO_PATH_1)
 bg_video = get_bg_video_base64(BG_VIDEO_PATH)
 
-# ---------- CSS (UNCHANGED) ----------
+# =======================
+# CSS
+# =======================
 st.markdown(
     f"""
     <style>
-    html, body {{
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        background: black;
-        overflow-x: hidden;
-    }}
-
+    body {{ background:black; }}
     .bg-video {{
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        object-fit: cover;
-        z-index: -1;
-        filter: brightness(0.45);
+        position:fixed;
+        top:0; left:0;
+        width:100vw; height:100vh;
+        object-fit:cover;
+        z-index:-1;
+        filter:brightness(0.4);
     }}
-
-    .block-container {{
-        padding: 0 !important;
-        margin: 0 !important;
-        max-width: 100% !important;
-    }}
-
-    .overlay {{
-        min-height: calc(100vh - 380px); 
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start; 
-        text-align: center;
-    }}
-
-    .title {{
-        font-size: 70px;
-        font-weight: 900;
-        color: #FFFFFF;
-        letter-spacing: 5px;
-        text-shadow:
-            0 0 6px  #FFFFFF,
-            0 0 14px rgba(255,255,255,0.8),
-            0 0 30px rgba(255,255,255,0.6);
-        margin-top: 5px; 
-    }}
-
-    .subtitle {{
-        font-size: 20px;
-        color: #F0F0F0;
-        margin-bottom: 20px;
-    }}
-
     .card {{
-        max-width: 400px !important;
-        width: 100% !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-        background: rgba(0,0,0,0.35); 
-        padding: 22px;
-        border-radius: 16px;
-        border: 1px solid rgba(255,255,255,0.15);
-        backdrop-filter: blur(6px);
+        max-width:420px;
+        margin:auto;
+        background:rgba(0,0,0,0.6);
+        padding:20px;
+        border-radius:12px;
     }}
-
-    div[data-testid="stTextInput"],
-    div[data-testid="stPasswordInput"],
-    div[data-testid="stRadio"],
-    div[data-testid="stButton"],
-    div[data-testid="stCameraInput"],
-    div[data-testid="stAudioInput"] {{
-        max-width: 400px !important;
-        width: 100% !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-    }}
-
     div.stButton > button {{
-        width: 100% !important;
-        background-color: rgba(0, 0, 0, 0.6) !important;
-        color: #00FF41 !important;
-        border: 2px solid #00FF41 !important;
-        border-radius: 8px !important;
-        padding: 10px 20px !important;
-        font-size: 16px !important;
-        font-weight: bold !important;
-        transition: all 0.2s ease-in-out !important;
-        box-shadow: 0 0 5px #00FF41, inset 0 0 5px #00FF41 !important; 
-    }}
-
-    .info-box {{
-        max-width: 400px !important;
-        background: rgba(0,0,0,0.5);
-    }}
-
-    .system-status {{
-        max-width: 400px !important;
+        width:100%;
+        background:black;
+        color:#00FF41;
+        border:2px solid #00FF41;
+        font-weight:bold;
     }}
     </style>
 
-    <video class="bg-video" autoplay loop muted playsinline>
+    <video class="bg-video" autoplay loop muted>
         <source src="data:video/mp4;base64,{bg_video}" type="video/mp4">
     </video>
     """,
     unsafe_allow_html=True
 )
 
-# ---------- 1. VIDEO DISPLAY (AT THE VERY TOP) ----------
-st.warning("If the video does not autoplay, please click the play button due to browser restrictions.", icon="⚠️")
+# =======================
+# UI
+# =======================
 st.markdown(video_html, unsafe_allow_html=True)
-
-# ---------- 2. UI HEADER (BELOW VIDEO) ----------
-st.markdown(
-    """
-    <div class="overlay">
-        <div class="title"><h1>AFVEL<h1/></div>
-        <div class="subtitle">AI Face & Voice Entry Lock</div>
-    """,
-    unsafe_allow_html=True
-)
-
-# ---------- 3. INSTRUCTION AND CREATOR INFO (AFTER TITLE) ----------
-info_html = f"""
-<div class="info-box">
-    <h3>SYSTEM PROTOCOL: USER AUTHENTICATION</h3>
-    <ul>
-        <li>**Mode Select:** Choose **Enroll** (Initial Setup) or **Verify** (Access).</li>
-        <li>**ID Entry:** Provide Name, Email (used as Unique ID), and System Key.</li>
-        <li>**Biometric Capture:** Capture a fresh **Face** image and **Voice** recording.</li>
-        <li>**Execute:** Click the button to save or check your multi-factor identity.</li>
-    </ul>
-    <p class="creator-credit">
-        <span style='color: #00FFFF;'>//SYSTEM BUILD //</span><br>
-        Creator: <span style='font-weight: bold;'>Himxhuydv</span> | AFVEL v1.0
-    </p>
-</div>
-"""
-st.markdown(info_html, unsafe_allow_html=True)
-
-# ---------- 4. NEW: DEVELOPER SIGNATURE BAR (FILLING THE GAP) ----------
-developer_signature_html = f"""
-<div class="system-status">
-    <span>[DESIGN STATUS] GENERALLY DESIGNED AND MADE BY HIMXHUYDV: DASHING 19 YEAR OLD, DECENT CUTE PUNJABI MUNDA</span>
-</div>
-"""
-st.markdown(developer_signature_html, unsafe_allow_html=True)
-
-# ---------- MODE & INPUTS SETUP (AFTER GAP) ----------
-mode = st.radio("Select Mode", ["Enroll", "Verify"], horizontal=True)
-name = st.text_input("Enter your name") 
-user_email = st.text_input("Enter your email")
-user_password = st.text_input("Enter System Key", type="password")
-
-os.makedirs("data/faces", exist_ok=True)
-os.makedirs("data/voices", exist_ok=True)
-os.makedirs(PASSWORD_DIR, exist_ok=True) 
-
-def get_safe_id(email):
-    safe_id = re.sub(r'[^a-zA-Z0-9\-\.]', '_', email)
-    return safe_id.lower().strip('_')
-
+st.markdown("<h1 style='text-align:center;color:white;'>AFVEL</h1>", unsafe_allow_html=True)
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-# ---------- ENROLL (Complete) ----------
+mode = st.radio("Select Mode", ["Enroll", "Verify"], horizontal=True)
+
+# Reset message when leaving Enroll
+if mode != "Enroll":
+    st.session_state.enroll_success = False
+
+# =======================
+# ENROLL
+# =======================
 if mode == "Enroll":
-    st.markdown("### 🧑 Enrollment")
+    email = st.text_input("Email")
+    password = st.text_input("System Key", type="password")
     face = st.camera_input("Capture Face")
     voice = st.audio_input("Record Voice")
 
-    if st.button("Save Identity"):
-        if not (user_email and user_password and face and voice):
-            st.warning("Please provide name, email, System Key, face, and voice to enroll.")
-        elif '@' not in user_email or '.' not in user_email:
-            st.error("Please enter a valid email address.")
+    if st.button("Register Identity"):
+        if not email:
+            st.warning("❌ Email required")
+        elif not password:
+            st.warning("❌ System Key required")
+        elif face is None:
+            st.warning("❌ Capture your face")
+        elif voice is None:
+            st.warning("❌ Record your voice")
         else:
-            safe_id = get_safe_id(user_email)
-            with open(f"data/faces/{safe_id}.jpg", "wb") as f:
-                f.write(face.getbuffer())
-            with open(f"data/voices/{safe_id}.wav", "wb") as f:
-                f.write(voice.getbuffer())
-            with open(f"{PASSWORD_DIR}/{safe_id}.txt", "w") as f:
-                f.write(user_password)
-            st.success(f"✅ Identity for **{user_email}** Enrolled Successfully")
+            save_user(email, password, face, voice)
+            st.session_state.enroll_success = True
 
-# ---------- VERIFY (Complete) ----------
+if st.session_state.enroll_success:
+    st.success("✅ Your identity has been successfully saved!")
+    st.toast("Enrollment successful 🎉", icon="✅")
+
+# =======================
+# VERIFY
+# =======================
 if mode == "Verify":
-    st.markdown("### 🔐 Verification")
-    face = st.camera_input("Capture Face")
-    voice = st.audio_input("Record Voice")
+    email = st.text_input("Email")
+    password = st.text_input("System Key", type="password")
+    face = st.camera_input("Scan Face")
 
     if st.button("Verify Identity"):
-        safe_id = get_safe_id(user_email)
-        password_path = f"{PASSWORD_DIR}/{safe_id}.txt"
-        if os.path.exists(password_path):
-            with open(password_path) as f:
-                if f.read().strip() == user_password:
-                    st.success("🔓 ACCESS GRANTED (Basic Multi-factor Match)")
-                else:
-                    st.error("❌ ACCESS DENIED: Invalid System Key.")
+        if verify_password(email, password):
+            if verify_face(email, face):
+                st.session_state.access_granted = True
+                st.success(f"🔓 ACCESS GRANTED — Welcome {email}")
+            else:
+                st.error("❌ Face does not match")
         else:
-            st.error("❌ ACCESS DENIED: Identity not found.")
+            st.error("❌ Invalid password")
 
-st.markdown("</div>", unsafe_allow_html=True)
+# =======================
+# POST LOGIN
+# =======================
+if st.session_state.access_granted:
+    st.markdown("### 🎁 You have a gift")
+    if st.button("OPEN GIFT"):
+        st.image("assets/qr.png", caption="Scan QR to Continue")
+
 st.markdown("</div>", unsafe_allow_html=True)

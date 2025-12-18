@@ -1,9 +1,9 @@
+from backend.storage import enroll_user, verify_user
 import streamlit as st
 import base64
 
 st.set_page_config(page_title="AFVEL", layout="wide")
 
-# ---------- PATHS ----------
 VIDEO_PATH = r"C:\Users\ashay\OneDrive\Desktop\SACRIFICES OF COMFORT\AFVEL\AFVEL\Foundation\assets\video1.mp4"
 LOGO_PATH  = r"C:\Users\ashay\OneDrive\Desktop\SACRIFICES OF COMFORT\AFVEL\AFVEL\Foundation\assets\logo2.jpg"
 
@@ -14,7 +14,7 @@ def to_base64(path):
 video_b64 = to_base64(VIDEO_PATH)
 logo_b64  = to_base64(LOGO_PATH)
 
-# ---------- CSS ----------
+# ---------------- CSS ----------------
 st.markdown(f"""
 <style>
 [data-testid="stAppViewContainer"] {{
@@ -93,13 +93,12 @@ div.stButton > button {{
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- TITLE ----------
+# ---------------- TITLE ----------------
 st.markdown('<div class="glowing-title">AFVEL</div>', unsafe_allow_html=True)
 
-# ---------- MAIN LAYOUT ----------
 left, right = st.columns([1, 1])
 
-# ---------- LEFT : VIDEO ----------
+# ---------------- LEFT VIDEO ----------------
 with left:
     st.markdown(f"""
     <div class="video-wrapper">
@@ -109,32 +108,46 @@ with left:
     </div>
     """, unsafe_allow_html=True)
 
-# ---------- RIGHT : ACCESS + BIOMETRIC ----------
+# ---------------- RIGHT PANEL ----------------
 with right:
     st.markdown("<div class='section-title'>ACCESS CONTROL</div>", unsafe_allow_html=True)
 
     mode = st.radio("MODE", ["Enroll", "Verify"], horizontal=True)
 
-    # ---------- ENROLL (UNCHANGED) ----------
+    # -------- ENROLL --------
     if mode == "Enroll":
-        st.text_input("FULL NAME")
-        st.text_input("EMAIL ADDRESS")
-        st.text_input("PASSWORD", type="password")
+        name = st.text_input("FULL NAME")
+        email = st.text_input("EMAIL ADDRESS")
+        password = st.text_input("PASSWORD", type="password")
 
         st.markdown("<div class='section-title'>BIOMETRIC SCANNER</div>", unsafe_allow_html=True)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.camera_input("CAPTURE FACE")
+            face_file = st.camera_input("CAPTURE FACE")
         with c2:
-            st.audio_input("CAPTURE VOICE")
+            voice_file = st.audio_input("CAPTURE VOICE")
 
-        st.button("REGISTER IDENTITY")
+        if st.button("REGISTER IDENTITY"):
+            if not all([name, email, password, face_file, voice_file]):
+                st.error("All fields are required")
+            else:
+                success, msg = enroll_user(
+                    name=name,
+                    email=email,
+                    password=password,
+                    face_file=face_file,
+                    voice_file=voice_file
+                )
+                if success:
+                    st.success(msg)
+                else:
+                    st.error(msg)
 
-    # ---------- VERIFY (EMAIL + PASSWORD + BIOMETRIC) ----------
+    # -------- VERIFY --------
     if mode == "Verify":
-        st.text_input("EMAIL ADDRESS")
-        st.text_input("PASSWORD", type="password")
+        email = st.text_input("EMAIL ADDRESS")
+        password = st.text_input("PASSWORD", type="password")
 
         st.markdown("<div class='section-title'>BIOMETRIC SCANNER</div>", unsafe_allow_html=True)
 
@@ -144,4 +157,9 @@ with right:
         with c2:
             st.audio_input("SCAN VOICE")
 
-        st.button("LOGIN")
+        if st.button("LOGIN"):
+            success, user = verify_user(email, password)
+            if success:
+                st.success(f"Welcome {user['name']}")
+            else:
+                st.error("Invalid credentials")
