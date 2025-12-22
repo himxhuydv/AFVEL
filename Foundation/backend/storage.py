@@ -2,7 +2,7 @@ import os
 import json
 import uuid
 from datetime import datetime
-from .face_engine import get_face_embedding
+from backend.face_engine import get_face_embedding
 
 
 BASE_DIR = os.path.join(os.getcwd(), "data")

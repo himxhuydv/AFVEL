@@ -1,7 +1,13 @@
 from backend.storage import enroll_user, verify_user
+from backend.face_engine import (
+    get_face_embedding_from_bytes,
+    compare_faces
+)
+
 import streamlit as st
 import base64
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="AFVEL", layout="wide")
 
 VIDEO_PATH = r"C:\Users\ashay\OneDrive\Desktop\SACRIFICES OF COMFORT\AFVEL\AFVEL\Foundation\assets\video1.mp4"
@@ -78,10 +84,6 @@ st.markdown(f"""
     border: 1px solid #00FF41 !important;
 }}
 
-[data-testid="stAudioInput"] {{
-    transform: scale(0.9);
-}}
-
 div.stButton > button {{
     width: 100% !important;
     background-color: #00FF41 !important;
@@ -89,6 +91,22 @@ div.stButton > button {{
     font-weight: 900 !important;
     border: none !important;
     padding: 10px !important;
+}}
+
+/* ===== CAMERA: SMALL + NO EMPTY SPACE ===== */
+[data-testid="stCameraInput"] {{
+    transform: scale(0.7);
+    transform-origin: top center;
+    height: auto !important;
+}}
+
+[data-testid="stCameraInput"] > div {{
+    margin: 0 auto !important;
+}}
+
+[data-testid="stCameraInput"] video {{
+    max-height: 220px;   /* adjust: 200–240px if needed */
+    height: auto !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -114,7 +132,6 @@ with right:
 
     mode = st.radio("MODE", ["Enroll", "Verify"], horizontal=True)
 
-    # ---------- SESSION STATE ----------
     if "logged_user" not in st.session_state:
         st.session_state.logged_user = None
 
@@ -124,39 +141,59 @@ with right:
         email = st.text_input("EMAIL ADDRESS")
         password = st.text_input("PASSWORD", type="password")
 
-        st.markdown("<div class='section-title'>BIOMETRIC SCANNER</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>FACE SCANNER</div>", unsafe_allow_html=True)
 
-        c1, c2 = st.columns(2)
-        with c1:
-            face_file = st.camera_input("CAPTURE FACE")
-        with c2:
-            voice_file = st.audio_input("CAPTURE VOICE")
+        face_file = st.camera_input("CAPTURE FACE")
 
         if st.button("REGISTER IDENTITY"):
-            if not all([name, email, password, face_file, voice_file]):
+            if not all([name, email, password, face_file]):
                 st.error("All fields are required")
             else:
                 success, msg = enroll_user(
                     name=name,
                     email=email,
                     password=password,
-                    face_file=face_file,
-                    voice_file=voice_file
+                    face_file=face_file
                 )
                 if success:
                     st.success(msg)
                 else:
                     st.error(msg)
 
-    # -------- VERIFY (CLEAN, NO DEBUG) --------
+    # -------- VERIFY --------
     if mode == "Verify":
         email = st.text_input("EMAIL ADDRESS")
         password = st.text_input("PASSWORD", type="password")
 
+        live_face = st.camera_input("SCAN FACE")
+
         if st.button("LOGIN"):
-            success, user = verify_user(email, password)
-            if success:
-                st.session_state.logged_user = user
-                st.success(f"Welcome {user['name']}")
+            if not live_face:
+                st.error("Please scan your face")
             else:
-                st.error("Invalid credentials")
+                success, user = verify_user(email, password)
+
+                if not success:
+                    st.error("Invalid credentials")
+                else:
+                    stored_embedding = user["face_embedding"]
+                    live_embedding = get_face_embedding_from_bytes(live_face)
+
+                    if live_embedding is None:
+                        st.error("Face not detected properly")
+                    else:
+                        match, distance = compare_faces(
+                            stored_embedding,
+                            live_embedding
+                        )
+
+                        if match:
+                            st.session_state.logged_user = user
+                            st.success(
+                                f"Welcome {user['name']} ✔ Face Verified "
+                                f"(distance: {distance:.3f})"
+                            )
+                        else:
+                            st.error(
+                                f"Face mismatch ❌ (distance: {distance:.3f})"
+                            )
