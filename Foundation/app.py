@@ -53,7 +53,6 @@ st.markdown(f"""
 }}
 
 .video-wrapper {{
-    position: relative;
     border-radius: 10px;
     overflow: hidden;
     border: 2px solid #00FF41;
@@ -69,7 +68,7 @@ st.markdown(f"""
     color: #9AFF9A;
     font-weight: 800;
     letter-spacing: 2px;
-    margin: 14px 0 8px 0;
+    margin: 14px 0 6px 0;
     font-size: 13px;
 }}
 
@@ -84,29 +83,32 @@ st.markdown(f"""
     border: 1px solid #00FF41 !important;
 }}
 
+/* 🔥 SMALL BUTTON STYLE (REGISTER) */
 div.stButton > button {{
-    width: 100% !important;
+    width: auto !important;
+    background-color: transparent !important;
+    color: #00FF41 !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    padding: 6px 14px !important;
+    border: 1px solid #00FF41 !important;
+    border-radius: 6px !important;
+    margin-top: 6px !important;
+}}
+
+div.stButton > button:hover {{
     background-color: #00FF41 !important;
     color: #000000 !important;
-    font-weight: 900 !important;
-    border: none !important;
-    padding: 10px !important;
 }}
 
-/* ===== CAMERA: SMALL + NO EMPTY SPACE ===== */
+/* CAMERA SIZE */
 [data-testid="stCameraInput"] {{
-    transform: scale(0.7);
+    transform: scale(0.9);
     transform-origin: top center;
-    height: auto !important;
-}}
-
-[data-testid="stCameraInput"] > div {{
-    margin: 0 auto !important;
 }}
 
 [data-testid="stCameraInput"] video {{
-    max-height: 220px;   /* adjust: 200–240px if needed */
-    height: auto !important;
+    max-height: 300px;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -132,10 +134,7 @@ with right:
 
     mode = st.radio("MODE", ["Enroll", "Verify"], horizontal=True)
 
-    if "logged_user" not in st.session_state:
-        st.session_state.logged_user = None
-
-    # -------- ENROLL --------
+    # ============ ENROLL ============
     if mode == "Enroll":
         name = st.text_input("FULL NAME")
         email = st.text_input("EMAIL ADDRESS")
@@ -143,9 +142,11 @@ with right:
 
         st.markdown("<div class='section-title'>FACE SCANNER</div>", unsafe_allow_html=True)
 
+        register_btn = st.button("REGISTER IDENTITY")
+
         face_file = st.camera_input("CAPTURE FACE")
 
-        if st.button("REGISTER IDENTITY"):
+        if register_btn:
             if not all([name, email, password, face_file]):
                 st.error("All fields are required")
             else:
@@ -160,40 +161,18 @@ with right:
                 else:
                     st.error(msg)
 
-    # -------- VERIFY --------
+    # ============ VERIFY ============
     if mode == "Verify":
         email = st.text_input("EMAIL ADDRESS")
         password = st.text_input("PASSWORD", type="password")
 
+        login_btn = st.button("LOGIN")
         live_face = st.camera_input("SCAN FACE")
 
-        if st.button("LOGIN"):
+        if login_btn:
             if not live_face:
                 st.error("Please scan your face")
             else:
                 success, user = verify_user(email, password)
-
                 if not success:
                     st.error("Invalid credentials")
-                else:
-                    stored_embedding = user["face_embedding"]
-                    live_embedding = get_face_embedding_from_bytes(live_face)
-
-                    if live_embedding is None:
-                        st.error("Face not detected properly")
-                    else:
-                        match, distance = compare_faces(
-                            stored_embedding,
-                            live_embedding
-                        )
-
-                        if match:
-                            st.session_state.logged_user = user
-                            st.success(
-                                f"Welcome {user['name']} ✔ Face Verified "
-                                f"(distance: {distance:.3f})"
-                            )
-                        else:
-                            st.error(
-                                f"Face mismatch ❌ (distance: {distance:.3f})"
-                            )
